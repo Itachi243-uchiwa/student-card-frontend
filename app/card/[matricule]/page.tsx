@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
+import { Wifi, WifiOff, Download, AlertCircle, Share } from "lucide-react"
 
 interface StudentData {
     id: number
@@ -12,215 +13,282 @@ interface StudentData {
     program: string
     academic_year: string
     expiration_date: string
-    phone?: string
     photo_url?: string
+    is_active: boolean
+    is_expired: boolean
 }
 
-interface StudentCardPreviewProps {
+interface CardData {
     student: StudentData
-    showQRCode?: boolean
-    qrCodeUrl?: string
+    qr_code_base64: string
+    signature: string
+    card_url: string
+    is_expired: boolean
+    message: string
 }
 
-export function StudentCardPreview({
-                                       student,
-                                       showQRCode = true,
-                                       qrCodeUrl,
-                                   }: StudentCardPreviewProps) {
-    const [qrCode, setQrCode] = useState<string>(qrCodeUrl || "")
-    const [loading, setLoading] = useState(!qrCodeUrl)
+export default function StudentCardPage() {
+    const params = useParams()
+    const matricule = params.matricule as string
 
+    const [cardData, setCardData] = useState<CardData | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [isOnline, setIsOnline] = useState(true)
+
+    // PWA States
+    const [installPrompt, setInstallPrompt] = useState<any>(null)
+    const [isStandalone, setIsStandalone] = useState(false)
+    const [isIOS, setIsIOS] = useState(false)
+
+    // Détecter le statut en ligne/hors ligne et environnement
     useEffect(() => {
-        if (qrCodeUrl) {
-            setQrCode(qrCodeUrl)
-            setLoading(false)
-            return
+        const handleOnline = () => setIsOnline(true)
+        const handleOffline = () => setIsOnline(false)
+
+        setIsOnline(navigator.onLine)
+        window.addEventListener('online', handleOnline)
+        window.addEventListener('offline', handleOffline)
+
+        // Détection iOS simple
+        const userAgent = window.navigator.userAgent.toLowerCase()
+        setIsIOS(/iphone|ipad|ipod/.test(userAgent))
+
+        // Vérifier si déjà installé (mode standalone)
+        const checkStandalone = () => {
+            const isStand = window.matchMedia('(display-mode: standalone)').matches ||
+                (window.navigator as any).standalone === true
+            setIsStandalone(isStand)
         }
 
-        const fetchQRCode = async () => {
+        checkStandalone()
+        window.addEventListener('resize', checkStandalone)
+
+        return () => {
+            window.removeEventListener('online', handleOnline)
+            window.removeEventListener('offline', handleOffline)
+            window.removeEventListener('resize', checkStandalone)
+        }
+    }, [])
+
+    // Capturer l'événement d'installation PWA (Android/Desktop)
+    useEffect(() => {
+        const handler = (e: Event) => {
+            e.preventDefault()
+            setInstallPrompt(e)
+        }
+        window.addEventListener('beforeinstallprompt', handler)
+        return () => window.removeEventListener('beforeinstallprompt', handler)
+    }, [])
+
+    // Charger les données de la carte
+    useEffect(() => {
+        if (!matricule) return
+
+        const fetchCard = async () => {
             try {
-                const API_URL =
-                    process.env.NEXT_PUBLIC_API_URL ||
-                    "https://student-card-backend-production.up.railway.app"
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app"
+                const response = await fetch(`${API_URL}/api/v1/cards/students/${matricule}/secure-card`)
 
-                const response = await fetch(
-                    `${API_URL}/api/v1/cards/students/${student.matricule}/secure-card`
-                )
+                if (!response.ok) throw new Error("Carte non trouvée")
 
-                if (response.ok) {
-                    const data = await response.json()
-                    setQrCode(data.qr_code_base64)
+                const data: CardData = await response.json()
+                setCardData(data)
+                localStorage.setItem(`card_${matricule}`, JSON.stringify(data))
+
+            } catch (err) {
+                console.error("Erreur chargement carte:", err)
+                const cached = localStorage.getItem(`card_${matricule}`)
+                if (cached) {
+                    setCardData(JSON.parse(cached))
+                    setIsOnline(false)
+                } else {
+                    setError("Impossible de charger la carte")
                 }
-            } catch (error) {
-                console.error("Erreur QR code:", error)
             } finally {
                 setLoading(false)
             }
         }
+        fetchCard()
+    }, [matricule])
 
-        fetchQRCode()
-    }, [student.matricule, qrCodeUrl])
+    // Gestion installation
+    const handleInstall = async () => {
+        // Cas 1 : Android/Chrome avec event
+        if (installPrompt) {
+            installPrompt.prompt()
+            const { outcome } = await installPrompt.userChoice
+            if (outcome === 'accepted') {
+                setInstallPrompt(null)
+            }
+            return
+        }
 
-    const expiryDate = new Date(student.expiration_date)
-    const isExpired = expiryDate < new Date()
+        // Cas 2 : iOS ou Navigateur sans support auto
+        if (isIOS) {
+            alert("Pour installer sur iPhone :\n1. Appuyez sur le bouton Partager (carré avec flèche) ⎋\n2. Défilez vers le bas\n3. Sélectionnez 'Sur l'écran d'accueil' ⊞")
+        } else {
+            alert("Pour installer l'application, utilisez le menu de votre navigateur (trois points) et cherchez 'Installer l'application' ou 'Ajouter à l'écran d'accueil'.")
+        }
+    }
 
-    return (
-        <div className="w-full max-w-md mx-auto px-2 sm:px-0">
-
-            {/* ---- CARTE ---- */}
-            <div
-                className={`rounded-xl shadow-xl overflow-hidden transition-all relative ${
-                    isExpired ? "opacity-70" : ""
-                }`}
-                style={{
-                    background:
-                        "linear-gradient(135deg, #003057 0%, #0066a1 50%, #003057 100%)",
-                    aspectRatio: "1 / 1.65",
-                }}
-            >
-                <div className="h-full p-3 text-white relative flex flex-col">
-
-                    {/* HEADER */}
-                    <div className="flex items-start justify-between mb-2">
-                        <img
-                            src="/Logo-esi.png"
-                            alt="HE2B ESI"
-                            className="h-8 w-auto sm:h-10 md:h-12"
-                        />
-
-                        <div className="px-3 py-1 rounded-xl bg-black/30 text-right">
-                            <p className="text-xs font-bold uppercase leading-tight">
-                                Carte Étudiant
-                            </p>
-                            <p className="text-[10px] font-semibold">
-                                {student.academic_year}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* ZONE CENTRALE */}
-                    <div className="flex flex-1 items-start justify-between gap-2">
-
-                        {/* PHOTO */}
-                        <div className="flex flex-col items-start gap-1">
-                            {student.photo_url ? (
-                                <div className="w-16 h-20 sm:w-20 sm:h-24 md:w-24 md:h-28 rounded-lg overflow-hidden border border-white/40 bg-white shadow">
-                                    <img
-                                        src={student.photo_url}
-                                        className="w-full h-full object-cover"
-                                        alt={`${student.first_name} ${student.last_name}`}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="w-16 h-20 sm:w-20 sm:h-24 rounded-lg bg-white/20 border border-white/40 flex items-center justify-center">
-                                    <span className="text-xl font-bold">
-                                        {student.first_name[0]}
-                                        {student.last_name[0]}
-                                    </span>
-                                </div>
-                            )}
-
-                            <span className="text-xs sm:text-sm font-bold tracking-widest bg-white/20 px-2 py-1 rounded">
-                                {student.matricule}
-                            </span>
-                        </div>
-
-                        {/* NOM */}
-                        <div className="flex-1 min-w-0 flex flex-col justify-center">
-                            <p className="text-base sm:text-lg font-bold uppercase truncate">
-                                {student.last_name}
-                            </p>
-                            <p className="text-base sm:text-lg font-bold uppercase truncate">
-                                {student.first_name}
-                            </p>
-                        </div>
-
-                        {/* QR CODE */}
-                        {showQRCode && (
-                            <div className="bg-white p-1 rounded-md shadow">
-                                {loading ? (
-                                    <div className="w-16 h-16 flex items-center justify-center">
-                                        <div className="animate-spin h-6 w-6 rounded-full border-b-2 border-blue-600"></div>
-                                    </div>
-                                ) : qrCode ? (
-                                    <img
-                                        src={qrCode}
-                                        alt="QR Code"
-                                        className="w-16 h-16 object-contain"
-                                    />
-                                ) : (
-                                    <div className="w-16 h-16 bg-gray-200 flex items-center justify-center text-xs text-gray-500">
-                                        QR
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* BAS DE CARTE */}
-                    <div className="mt-auto pt-3 flex justify-between items-end">
-                        <p className="text-[10px] sm:text-xs font-semibold truncate text-center flex-1">
-                            {student.program}
-                        </p>
-
-                        <div className="text-right ml-2">
-                            <p className="text-[9px] opacity-80 uppercase">
-                                Expire le
-                            </p>
-                            <p className="text-xs font-bold">
-                                {expiryDate.toLocaleDateString("fr-FR")}
-                            </p>
-
-                            {isExpired && (
-                                <span className="mt-1 inline-block bg-red-600 px-2 py-0.5 rounded text-[10px] font-bold">
-                                    EXPIRÉ
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* BARRE COLORÉE */}
-                    <div
-                        className="absolute bottom-0 left-0 right-0 h-1"
-                        style={{
-                            background:
-                                "linear-gradient(90deg, #FFD700, #FF69B4, #87CEEB, #98FB98, #FFD700)",
-                        }}
-                    />
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-[#003057] to-[#0066a1] flex items-center justify-center p-4">
+                <div className="text-center text-white">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                    <p>Chargement...</p>
                 </div>
             </div>
+        )
+    }
 
-            {/* ---- INFOS ---- */}
-            <Card className="mt-4 p-4 space-y-3 shadow bg-card/70 backdrop-blur">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                        <p className="text-[10px] uppercase opacity-60 mb-1">
-                            Email
-                        </p>
-                        <p className="text-sm font-medium truncate">
-                            {student.email}
-                        </p>
+    if (error || !cardData) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-[#003057] to-[#0066a1] flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-xl">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-xl font-bold text-gray-900 mb-2">Erreur</h1>
+                    <p className="text-gray-600">{error || "Carte introuvable"}</p>
+                </div>
+            </div>
+        )
+    }
+
+    const { student, qr_code_base64, is_expired } = cardData
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-[#003057] to-[#0066a1] flex flex-col items-center justify-center p-4 md:p-6 font-sans">
+
+            <div className="w-full max-w-[600px] space-y-4 md:space-y-6">
+
+                {/* Barre d'outils mobile */}
+                <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
+                    {/* Indicateur Statut */}
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-medium shadow-lg backdrop-blur-md transition-colors w-full sm:w-auto justify-center ${
+                        isOnline ? "bg-white/10 text-white" : "bg-amber-500/80 text-white"
+                    }`}>
+                        {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                        <span>{isOnline ? "Connecté" : "Hors ligne"}</span>
                     </div>
 
-                    <div>
-                        <p className="text-[10px] uppercase opacity-60 mb-1">
-                            Téléphone
-                        </p>
-                        <p className="text-sm font-medium">
-                            {student.phone || "Non renseigné"}
-                        </p>
+                    {/* Bouton Installer (Visible seulement si pas installé) */}
+                    {!isStandalone && (
+                        <button
+                            onClick={handleInstall}
+                            className="flex items-center gap-2 bg-white text-[#003057] px-5 py-2 rounded-full font-bold text-xs sm:text-sm shadow-lg hover:shadow-xl active:scale-95 transition-all w-full sm:w-auto justify-center"
+                        >
+                            {isIOS ? <Share className="w-4 h-4" /> : <Download className="w-4 h-4" />}
+                            <span>Installer l'app</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* --- CARTE ÉTUDIANTE --- */}
+                <div className="relative w-full aspect-[1.586/1] rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl transition-transform hover:scale-[1.01] duration-300">
+
+                    {/* Fond de carte */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#003057] via-[#00558a] to-[#003057]" />
+
+                    {/* Contenu de la carte */}
+                    <div className="relative h-full flex flex-col p-[4%] text-white">
+
+                        {/* En-tête */}
+                        <div className="flex justify-between items-start mb-[2%]">
+                            <div className="bg-white/15 backdrop-blur-sm px-2 sm:px-3 py-1 sm:py-2 rounded-lg">
+                                {/* Logo responsive sizing */}
+                                <img src="/Logo-esi.png" alt="HE2B ESI" className="h-6 sm:h-8 md:h-12 w-auto" />
+                            </div>
+                            <div className="text-right">
+                                <div className="bg-black/30 backdrop-blur-sm px-3 py-1 rounded-bl-xl rounded-tr-xl">
+                                    <p className="text-[10px] sm:text-xs md:text-sm font-bold uppercase tracking-wider text-gray-200">Carte Étudiant</p>
+                                    <p className="text-[10px] sm:text-xs font-mono text-cyan-300">{student.academic_year}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Corps principal */}
+                        <div className="flex-1 flex items-center gap-3 sm:gap-5">
+
+                            {/* Photo Zone */}
+                            <div className="flex flex-col gap-1 w-[24%] flex-shrink-0">
+                                <div className="aspect-[3/4] rounded-lg overflow-hidden border-2 border-white/30 shadow-inner bg-black/20 relative">
+                                    {student.photo_url ? (
+                                        <img
+                                            src={student.photo_url}
+                                            alt="Student"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-white/50 text-[10px]">
+                                            Sans photo
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="bg-black/40 text-center rounded py-0.5 px-1">
+                                    <span className="text-[10px] sm:text-xs md:text-sm font-mono font-bold tracking-widest block truncate">
+                                        {student.matricule}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Info Zone */}
+                            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5 sm:gap-1">
+                                <h2 className="text-sm sm:text-xl md:text-2xl font-bold uppercase leading-tight truncate">
+                                    {student.last_name}
+                                </h2>
+                                <h2 className="text-sm sm:text-xl md:text-2xl font-normal capitalize leading-tight truncate text-gray-200">
+                                    {student.first_name}
+                                </h2>
+                                <div className="mt-1 sm:mt-2 h-0.5 w-12 bg-cyan-400/50 rounded-full" />
+                            </div>
+
+                            {/* QR Code Zone */}
+                            <div className="w-[20%] flex-shrink-0 flex flex-col items-center justify-center">
+                                <div className="bg-white p-1 sm:p-1.5 rounded-lg shadow-lg w-full aspect-square">
+                                    <img src={qr_code_base64} alt="QR" className="w-full h-full object-contain" />
+                                </div>
+                                {/* Texte sécurisé supprimé ici */}
+                            </div>
+                        </div>
+
+                        {/* Pied de carte */}
+                        <div className="mt-auto pt-2 flex items-end justify-between border-t border-white/10">
+                            <div className="flex-1 mr-4">
+                                <p className="text-[8px] sm:text-[10px] text-gray-300 uppercase tracking-wider">Programme</p>
+                                <p className="text-[10px] sm:text-sm font-semibold truncate leading-tight">{student.program}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                                <p className="text-[8px] sm:text-[10px] text-gray-300 uppercase tracking-wider">Validité</p>
+                                <div className="flex items-center gap-2 justify-end">
+                                    <p className="text-[10px] sm:text-sm font-bold font-mono">
+                                        {new Date(student.expiration_date).toLocaleDateString("fr-FR")}
+                                    </p>
+                                    {is_expired && (
+                                        <span className="bg-red-500 text-white text-[8px] sm:text-[10px] px-1.5 py-0.5 rounded font-bold animate-pulse">
+                                            EXP
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bande holographique décorative bas */}
+                        <div className="absolute bottom-0 left-0 right-0 h-1.5 sm:h-2 opacity-80"
+                             style={{
+                                 background: "linear-gradient(90deg, #fbbf24 0%, #f472b6 25%, #22d3ee 50%, #4ade80 75%, #fbbf24 100%)"
+                             }}
+                        />
                     </div>
                 </div>
 
-                <div className="pt-2 border-t border-border/40">
-                    <p className="text-[10px] uppercase opacity-60 mb-1">
-                        Programme
-                    </p>
-                    <p className="text-sm font-medium break-words">
-                        {student.program}
-                    </p>
-                </div>
-            </Card>
+                {/* Instructions iOS (s'affiche seulement si on clique sur installer) */}
+                {isIOS && !isStandalone && (
+                    <div className="text-center text-white/60 text-[10px] sm:text-xs mt-2 px-4">
+                        Pour un accès rapide, ajoutez cette page à votre écran d'accueil.
+                    </div>
+                )}
+            </div>
         </div>
     )
 }
