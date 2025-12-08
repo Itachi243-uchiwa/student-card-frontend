@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         formData.append('password', password)
 
         // Appel direct avec fetch au lieu de apiCall
-        const response = await fetch("http://localhost:8000/api/v1/auth/login", {
+        const response = await fetch("https://student-card-backend-production.up.railway.app/api/v1/auth/login", {
             method: "POST",
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
