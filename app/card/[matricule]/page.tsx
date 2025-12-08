@@ -70,7 +70,7 @@ export default function StudentCardPage() {
 
         const fetchCard = async () => {
             try {
-                const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app"
                 const response = await fetch(`${API_URL}/api/v1/cards/students/${matricule}/secure-card`)
 
                 if (!response.ok) {

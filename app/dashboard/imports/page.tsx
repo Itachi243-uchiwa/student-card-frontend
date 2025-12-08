@@ -48,7 +48,7 @@ export default function ImportsPage() {
         if (!token) return
         setDownloadingTemplate(true)
         try {
-            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app/api/v1"
             const response = await fetch(`${API_BASE_URL}/imports/template/download`, {
                 method: "GET",
                 headers: { Authorization: `Bearer ${token}` },
@@ -79,7 +79,7 @@ export default function ImportsPage() {
             const formData = new FormData()
             formData.append("file", file)
 
-            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app/api/v1"
             const response = await fetch(`${API_BASE_URL}/imports/upload-csv`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
