@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app/api/v1/"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app/api/v1"
 
 interface RequestOptions extends RequestInit {
   token?: string
