@@ -43,7 +43,7 @@ export default function StudentDetailPage() {
                 setStudent(studentData)
 
                 // Générer le lien de la carte PWA
-                const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "https://student-card-backend-production.up.railway.app"
+                const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "https://cards-students.vercel.app"
                 const link = `${FRONTEND_URL}/card/${studentData.matricule}`
                 setCardLink(link)
             } catch (error) {
