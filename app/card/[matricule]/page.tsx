@@ -29,7 +29,8 @@ interface CardData {
 
 export default function StudentCardPage() {
     const params = useParams()
-    const matricule = params.matricule as string
+    // ✅ FIX: Meilleure gestion du matricule
+    const matricule = (params?.matricule as string) || null
 
     const [cardData, setCardData] = useState<CardData | null>(null)
     const [loading, setLoading] = useState(true)
@@ -40,6 +41,14 @@ export default function StudentCardPage() {
     const [installPrompt, setInstallPrompt] = useState<any>(null)
     const [isStandalone, setIsStandalone] = useState(false)
     const [isIOS, setIsIOS] = useState(false)
+
+    // ✅ Vérification du matricule au chargement
+    useEffect(() => {
+        if (!matricule || matricule === 'undefined') {
+            setError("Matricule invalide ou manquant dans l'URL")
+            setLoading(false)
+        }
+    }, [matricule])
 
     // Détection du statut en ligne/hors ligne et environnement
     useEffect(() => {
@@ -71,9 +80,9 @@ export default function StudentCardPage() {
         }
     }, [])
 
-    // IMPORTANT: Injection du manifest dynamique
+    // ✅ Injection du manifest dynamique avec vérification
     useEffect(() => {
-        if (!matricule) return
+        if (!matricule || matricule === 'undefined') return
 
         // Supprimer l'ancien manifest s'il existe
         const existingManifest = document.querySelector('link[rel="manifest"]')
@@ -87,6 +96,8 @@ export default function StudentCardPage() {
         manifestLink.href = `/card/${matricule}/manifest.json`
         document.head.appendChild(manifestLink)
 
+        console.log(`[PWA] Manifest chargé : /card/${matricule}/manifest.json`)
+
         return () => {
             manifestLink.remove()
         }
@@ -97,39 +108,56 @@ export default function StudentCardPage() {
         const handler = (e: Event) => {
             e.preventDefault()
             setInstallPrompt(e)
+            console.log('[PWA] Installation prompt capturé')
         }
         window.addEventListener('beforeinstallprompt', handler)
         return () => window.removeEventListener('beforeinstallprompt', handler)
     }, [])
 
-    // Charger les données de la carte
+    // ✅ Charger les données de la carte avec meilleure gestion d'erreur
     useEffect(() => {
-        if (!matricule) return
+        if (!matricule || matricule === 'undefined') return
 
         const fetchCard = async () => {
             try {
-                const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app"
-                const response = await fetch(`${API_URL}/api/v1/cards/students/${matricule}/secure-card`)
+                console.log(`[API] Chargement carte pour matricule: ${matricule}`)
 
-                if (!response.ok) throw new Error("Carte non trouvée")
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://student-card-backend-production.up.railway.app"
+                const url = `${API_URL}/api/v1/cards/students/${matricule}/secure-card`
+
+                console.log(`[API] URL complète: ${url}`)
+
+                const response = await fetch(url)
+
+                if (!response.ok) {
+                    const errorText = await response.text()
+                    console.error(`[API] Erreur ${response.status}:`, errorText)
+                    throw new Error(`Carte non trouvée (${response.status})`)
+                }
 
                 const data: CardData = await response.json()
+                console.log('[API] Carte chargée avec succès:', data.student.matricule)
+
                 setCardData(data)
                 localStorage.setItem(`card_${matricule}`, JSON.stringify(data))
 
             } catch (err) {
-                console.error("Erreur chargement carte:", err)
+                console.error("[API] Erreur chargement carte:", err)
+
+                // Essayer le cache local
                 const cached = localStorage.getItem(`card_${matricule}`)
                 if (cached) {
+                    console.log('[Cache] Utilisation du cache local')
                     setCardData(JSON.parse(cached))
                     setIsOnline(false)
                 } else {
-                    setError("Impossible de charger la carte")
+                    setError(`Impossible de charger la carte pour le matricule ${matricule}`)
                 }
             } finally {
                 setLoading(false)
             }
         }
+
         fetchCard()
     }, [matricule])
 
@@ -137,20 +165,39 @@ export default function StudentCardPage() {
     const handleInstall = async () => {
         // Cas 1 : Android/Chrome avec event
         if (installPrompt) {
-            installPrompt.prompt()
-            const { outcome } = await installPrompt.userChoice
-            if (outcome === 'accepted') {
-                setInstallPrompt(null)
+            try {
+                installPrompt.prompt()
+                const { outcome } = await installPrompt.userChoice
+                console.log(`[PWA] Installation ${outcome}`)
+                if (outcome === 'accepted') {
+                    setInstallPrompt(null)
+                }
+            } catch (err) {
+                console.error('[PWA] Erreur installation:', err)
             }
             return
         }
 
         // Cas 2 : iOS ou Navigateur sans support auto
         if (isIOS) {
-            alert("Pour installer sur iPhone :\n1. Appuyez sur le bouton Partager (carré avec flèche) ⎋\n2. Défilez vers le bas\n3. Sélectionnez 'Sur l'écran d'accueil' ⊞")
+            alert("Pour installer sur iPhone :\n\n1. Appuyez sur le bouton Partager (carré avec flèche ⎋) en bas\n2. Défilez vers le bas\n3. Sélectionnez 'Sur l'écran d'accueil' ⊞\n4. Appuyez sur 'Ajouter'")
         } else {
-            alert("Pour installer l'application, utilisez le menu de votre navigateur (trois points) et cherchez 'Installer l'application' ou 'Ajouter à l'écran d'accueil'.")
+            alert("Pour installer l'application :\n\n1. Ouvrez le menu de votre navigateur (⋮)\n2. Cherchez 'Installer l'application' ou 'Ajouter à l'écran d'accueil'\n3. Confirmez l'installation")
         }
+    }
+
+    // ✅ Affichage conditionnel selon l'état
+    if (!matricule || matricule === 'undefined') {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-[#003057] to-[#0066a1] flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-xl">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-xl font-bold text-gray-900 mb-2">URL Invalide</h1>
+                    <p className="text-gray-600">Le lien de la carte est incorrect ou incomplet.</p>
+                    <p className="text-sm text-gray-500 mt-4">Format attendu : /card/63888</p>
+                </div>
+            </div>
+        )
     }
 
     if (loading) {
@@ -158,7 +205,8 @@ export default function StudentCardPage() {
             <div className="min-h-screen bg-gradient-to-br from-[#003057] to-[#0066a1] flex items-center justify-center p-4">
                 <div className="text-center text-white">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-                    <p>Chargement...</p>
+                    <p className="text-lg">Chargement de votre carte...</p>
+                    <p className="text-sm opacity-75 mt-2">Matricule : {matricule}</p>
                 </div>
             </div>
         )
@@ -170,7 +218,11 @@ export default function StudentCardPage() {
                 <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-xl">
                     <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                     <h1 className="text-xl font-bold text-gray-900 mb-2">Erreur</h1>
-                    <p className="text-gray-600">{error || "Carte introuvable"}</p>
+                    <p className="text-gray-600 mb-4">{error || "Carte introuvable"}</p>
+                    <div className="bg-gray-100 rounded-lg p-3 text-sm text-left">
+                        <p className="text-gray-700"><strong>Matricule :</strong> {matricule}</p>
+                        <p className="text-gray-700"><strong>Statut :</strong> {isOnline ? '✅ En ligne' : '❌ Hors ligne'}</p>
+                    </div>
                 </div>
             </div>
         )
@@ -303,8 +355,8 @@ export default function StudentCardPage() {
 
                 {/* Instructions iOS (s'affiche seulement si on clique sur installer) */}
                 {isIOS && !isStandalone && (
-                    <div className="text-center text-white/60 text-[10px] sm:text-xs mt-2 px-4">
-                        Pour un accès rapide, ajoutez cette page à votre écran d'accueil.
+                    <div className="text-center text-white/80 text-xs sm:text-sm mt-2 px-4 bg-white/10 backdrop-blur-sm rounded-lg py-3">
+                        💡 Pour un accès rapide, ajoutez cette carte à votre écran d'accueil
                     </div>
                 )}
             </div>

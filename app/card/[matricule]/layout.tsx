@@ -1,10 +1,6 @@
 "use client"
 
-import type { Metadata } from "next"
 import { useEffect } from "react"
-
-// Note: Le metadata ne fonctionne pas dans les composants client
-// Il faudra utiliser next/head ou une approche différente
 
 export default function CardLayout({
                                        children,
@@ -13,14 +9,22 @@ export default function CardLayout({
     children: React.ReactNode
     params: { matricule: string }
 }) {
-    // Injection dynamique du manifest spécifique à cette carte
+    // ✅ Injection dynamique du manifest avec meilleure vérification
     useEffect(() => {
-        const matricule = params.matricule
+        const matricule = params?.matricule
+
+        if (!matricule || matricule === 'undefined') {
+            console.warn('[PWA] Matricule invalide, manifest non chargé')
+            return
+        }
+
+        console.log(`[PWA] Chargement manifest pour ${matricule}`)
 
         // Supprimer l'ancien manifest s'il existe
         const oldManifest = document.querySelector('link[rel="manifest"]')
         if (oldManifest) {
             oldManifest.remove()
+            console.log('[PWA] Ancien manifest supprimé')
         }
 
         // Ajouter le nouveau manifest dynamique
@@ -28,6 +32,7 @@ export default function CardLayout({
         manifestLink.rel = 'manifest'
         manifestLink.href = `/card/${matricule}/manifest.json`
         document.head.appendChild(manifestLink)
+        console.log(`[PWA] Nouveau manifest ajouté : ${manifestLink.href}`)
 
         // Mettre à jour le titre de la page
         document.title = `Ma Carte Étudiant ${matricule}`
@@ -37,10 +42,10 @@ export default function CardLayout({
             const currentManifest = document.querySelector(`link[rel="manifest"][href="/card/${matricule}/manifest.json"]`)
             if (currentManifest) {
                 currentManifest.remove()
+                console.log('[PWA] Manifest nettoyé')
             }
         }
-    }, [params.matricule])
+    }, [params?.matricule])
 
-    // Pas de header, pas de sidebar, juste la carte
     return <>{children}</>
 }
