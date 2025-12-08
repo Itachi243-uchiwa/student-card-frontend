@@ -41,7 +41,7 @@ export default function StudentCardPage() {
     const [isStandalone, setIsStandalone] = useState(false)
     const [isIOS, setIsIOS] = useState(false)
 
-    // Détecter le statut en ligne/hors ligne et environnement
+    // Détection du statut en ligne/hors ligne et environnement
     useEffect(() => {
         const handleOnline = () => setIsOnline(true)
         const handleOffline = () => setIsOnline(false)
@@ -50,7 +50,7 @@ export default function StudentCardPage() {
         window.addEventListener('online', handleOnline)
         window.addEventListener('offline', handleOffline)
 
-        // Détection iOS simple
+        // Détection iOS
         const userAgent = window.navigator.userAgent.toLowerCase()
         setIsIOS(/iphone|ipad|ipod/.test(userAgent))
 
@@ -70,6 +70,27 @@ export default function StudentCardPage() {
             window.removeEventListener('resize', checkStandalone)
         }
     }, [])
+
+    // IMPORTANT: Injection du manifest dynamique
+    useEffect(() => {
+        if (!matricule) return
+
+        // Supprimer l'ancien manifest s'il existe
+        const existingManifest = document.querySelector('link[rel="manifest"]')
+        if (existingManifest) {
+            existingManifest.remove()
+        }
+
+        // Ajouter le manifest dynamique pour cette carte
+        const manifestLink = document.createElement('link')
+        manifestLink.rel = 'manifest'
+        manifestLink.href = `/card/${matricule}/manifest.json`
+        document.head.appendChild(manifestLink)
+
+        return () => {
+            manifestLink.remove()
+        }
+    }, [matricule])
 
     // Capturer l'événement d'installation PWA (Android/Desktop)
     useEffect(() => {
@@ -179,7 +200,7 @@ export default function StudentCardPage() {
                             className="flex items-center gap-2 bg-white text-[#003057] px-5 py-2 rounded-full font-bold text-xs sm:text-sm shadow-lg hover:shadow-xl active:scale-95 transition-all w-full sm:w-auto justify-center"
                         >
                             {isIOS ? <Share className="w-4 h-4" /> : <Download className="w-4 h-4" />}
-                            <span>Installer l'app</span>
+                            <span>Installer ma carte</span>
                         </button>
                     )}
                 </div>
@@ -196,7 +217,6 @@ export default function StudentCardPage() {
                         {/* En-tête */}
                         <div className="flex justify-between items-start mb-[2%]">
                             <div className="bg-white/15 backdrop-blur-sm px-2 sm:px-3 py-1 sm:py-2 rounded-lg">
-                                {/* Logo responsive sizing */}
                                 <img src="/Logo-esi.png" alt="HE2B ESI" className="h-6 sm:h-8 md:h-12 w-auto" />
                             </div>
                             <div className="text-right">
@@ -248,7 +268,6 @@ export default function StudentCardPage() {
                                 <div className="bg-white p-1 sm:p-1.5 rounded-lg shadow-lg w-full aspect-square">
                                     <img src={qr_code_base64} alt="QR" className="w-full h-full object-contain" />
                                 </div>
-                                {/* Texte sécurisé supprimé ici */}
                             </div>
                         </div>
 

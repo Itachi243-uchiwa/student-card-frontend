@@ -1,13 +1,11 @@
-const CACHE_NAME = 'he2b-student-card-v2.0.0';
-const API_CACHE = 'he2b-api-cache-v2.0.0';
+const CACHE_NAME = 'he2b-student-card-v3.0.0';
+const API_CACHE = 'he2b-api-cache-v3.0.0';
 
 // Ressources à mettre en cache au premier chargement
 const STATIC_RESOURCES = [
-    '/',
     '/Logo-esi.png',
     '/icons/icon-192x192.png',
-    '/icons/icon-512x512.png',
-    '/manifest.json'
+    '/icons/icon-512x512.png'
 ];
 
 // ===== INSTALLATION =====
@@ -57,8 +55,8 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // ===== STRATÉGIE POUR LES API =====
-    if (url.pathname.startsWith('/api/v1/cards/students/')) {
+    // ===== STRATÉGIE POUR LES API (cartes étudiantes) =====
+    if (url.pathname.includes('/api/v1/cards/students/')) {
         event.respondWith(
             // Network First, puis Cache
             fetch(request)
@@ -74,14 +72,14 @@ self.addEventListener('fetch', (event) => {
                     // Si offline, utiliser le cache
                     return caches.match(request).then((cachedResponse) => {
                         if (cachedResponse) {
-                            console.log('[SW] Mode offline - utilisation du cache');
+                            console.log('[SW] Mode offline - utilisation du cache pour la carte');
                             return cachedResponse;
                         }
                         // Fallback si pas de cache
                         return new Response(
                             JSON.stringify({
                                 error: 'Offline',
-                                message: 'Vous êtes hors ligne. Les données en cache ne sont pas disponibles.'
+                                message: 'Vous êtes hors ligne. Veuillez vous connecter à Internet pour charger votre carte.'
                             }),
                             {
                                 status: 503,
@@ -89,6 +87,44 @@ self.addEventListener('fetch', (event) => {
                             }
                         );
                     });
+                })
+        );
+        return;
+    }
+
+    // ===== STRATÉGIE POUR LES PAGES DE CARTES (/card/[matricule]) =====
+    if (url.pathname.startsWith('/card/') && !url.pathname.includes('/manifest.json')) {
+        event.respondWith(
+            // Network First pour avoir les données à jour, puis Cache
+            fetch(request)
+                .then((response) => {
+                    const responseClone = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(request, responseClone);
+                    });
+                    return response;
+                })
+                .catch(() => {
+                    // Utiliser le cache si offline
+                    return caches.match(request);
+                })
+        );
+        return;
+    }
+
+    // ===== STRATÉGIE POUR LES MANIFESTS DYNAMIQUES =====
+    if (url.pathname.includes('/manifest.json')) {
+        event.respondWith(
+            fetch(request)
+                .then((response) => {
+                    const responseClone = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(request, responseClone);
+                    });
+                    return response;
+                })
+                .catch(() => {
+                    return caches.match(request);
                 })
         );
         return;
