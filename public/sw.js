@@ -1,5 +1,5 @@
-const CACHE_NAME = 'he2b-student-card-v3.0.0';
-const API_CACHE = 'he2b-api-cache-v3.0.0';
+const CACHE_NAME = 'he2b-student-card-v3.0.1';
+const API_CACHE = 'he2b-api-cache-v3.0.1';
 
 // Ressources à mettre en cache au premier chargement
 const STATIC_RESOURCES = [

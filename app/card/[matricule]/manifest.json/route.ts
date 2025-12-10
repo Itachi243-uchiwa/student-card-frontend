@@ -6,6 +6,10 @@ export async function GET(
 ) {
     const matricule = params.matricule;
 
+    if (!matricule || matricule === 'undefined' || matricule === 'null') {
+        return new NextResponse(null, { status: 404 });
+    }
+
     const manifest = {
         name: `Carte Étudiant ${matricule}`,
         short_name: `Carte ${matricule}`,

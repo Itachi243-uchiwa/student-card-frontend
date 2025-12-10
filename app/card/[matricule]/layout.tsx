@@ -41,7 +41,7 @@ export default function CardLayout({
                 document.head.removeChild(manifestLink)
             }
         }
-    }, [matricule]) // Dépendance sur la variable récupérée par le hook
+    }, [matricule])
 
     return <>{children}</>
 }
