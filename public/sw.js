@@ -92,20 +92,19 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // ===== STRATÉGIE POUR LES PAGES DE CARTES (/card/[matricule]) =====
-    if (url.pathname.startsWith('/card/') && !url.pathname.includes('/manifest.json')) {
+    if (url.pathname.startsWith('/card/') && !url.pathname.includes('/manifest.json') && !url.pathname.includes('undefined')) {
         event.respondWith(
-            // Network First pour avoir les données à jour, puis Cache
             fetch(request)
                 .then((response) => {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(request, responseClone);
-                    });
+                    if(response.status === 200) {
+                        const responseClone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(request, responseClone);
+                        });
+                    }
                     return response;
                 })
                 .catch(() => {
-                    // Utiliser le cache si offline
                     return caches.match(request);
                 })
         );

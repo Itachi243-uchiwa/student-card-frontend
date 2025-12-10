@@ -1,51 +1,47 @@
 "use client"
 
 import { useEffect } from "react"
+import { useParams } from "next/navigation"
 
 export default function CardLayout({
                                        children,
-                                       params,
                                    }: {
     children: React.ReactNode
-    params: { matricule: string }
 }) {
-    // ✅ Injection dynamique du manifest avec meilleure vérification
-    useEffect(() => {
-        const matricule = params?.matricule
+    // 1. On utilise le hook useParams qui est plus fiable dans les Client Components
+    const params = useParams()
+    const matricule = params?.matricule as string
 
-        if (!matricule || matricule === 'undefined') {
-            console.warn('[PWA] Matricule invalide, manifest non chargé')
+    useEffect(() => {
+        // 2. Sécurité stricte : Si pas de matricule ou s'il vaut littéralement "undefined", on arrête tout.
+        if (!matricule || matricule === 'undefined' || matricule === 'null') {
             return
         }
 
         console.log(`[PWA] Chargement manifest pour ${matricule}`)
 
-        // Supprimer l'ancien manifest s'il existe
+        // Supprimer l'ancien manifest s'il existe pour éviter les conflits
         const oldManifest = document.querySelector('link[rel="manifest"]')
         if (oldManifest) {
             oldManifest.remove()
-            console.log('[PWA] Ancien manifest supprimé')
         }
 
-        // Ajouter le nouveau manifest dynamique
+        // Ajouter le nouveau manifest
         const manifestLink = document.createElement('link')
         manifestLink.rel = 'manifest'
         manifestLink.href = `/card/${matricule}/manifest.json`
         document.head.appendChild(manifestLink)
-        console.log(`[PWA] Nouveau manifest ajouté : ${manifestLink.href}`)
 
-        // Mettre à jour le titre de la page
+        // Mettre à jour le titre
         document.title = `Ma Carte Étudiant ${matricule}`
 
-        // Cleanup : supprimer le manifest au démontage
         return () => {
-            const currentManifest = document.querySelector(`link[rel="manifest"][href="/card/${matricule}/manifest.json"]`)
-            if (currentManifest) {
-                currentManifest.remove()
-                console.log('[PWA] Manifest nettoyé')
+            // Nettoyage au démontage
+            if (document.head.contains(manifestLink)) {
+                document.head.removeChild(manifestLink)
             }
         }
-    }, [params?.matricule])
+    }, [matricule]) // Dépendance sur la variable récupérée par le hook
 
     return <>{children}</>
 }
